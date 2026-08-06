@@ -2,8 +2,8 @@ import SwiftUI
 import Photos
 
 /// The selected day's events as a pull-up bottom sheet. A grabber lets the user
-/// drag (or tap) it up to a full page. Each event expands inline to show its
-/// photos.
+/// drag (or flick) it up to a full page in a single swipe. Events with photos are
+/// expandable rows with a photo count; photo-less events drop to quiet plain lines.
 struct DayEventsPanel: View {
     let day: Date
     let events: [HangoutEvent]
@@ -12,13 +12,19 @@ struct DayEventsPanel: View {
     var onHide: (HangoutEvent) -> Void
 
     @State private var expanded = false
-    @GestureState private var dragTranslation: CGFloat = 0
+    @State private var dragOffset: CGFloat = 0
+    @State private var counts: [String: Int] = [:]
+    @State private var countsReady = false
 
+    private var photosGranted: Bool {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        return status == .authorized || status == .limited
+    }
     private var peekHeight: CGFloat { max(180, min(280, availableHeight * 0.4)) }
     private var fullHeight: CGFloat { max(peekHeight, availableHeight - 6) }
     private var height: CGFloat {
         let base = expanded ? fullHeight : peekHeight
-        return min(fullHeight, max(peekHeight, base - dragTranslation))
+        return min(fullHeight, max(peekHeight, base - dragOffset))
     }
 
     var body: some View {
@@ -31,8 +37,20 @@ struct DayEventsPanel: View {
         .background(Color(.systemBackground))
         .clipShape(UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22))
         .shadow(color: .black.opacity(0.12), radius: 12, y: -3)
-        .animation(.spring(response: 0.35, dampingFraction: 0.86), value: expanded)
+        .task(id: eventsKey) { await computeCounts() }
     }
+
+    private var eventsKey: String { events.map(\.id).joined(separator: ",") }
+
+    private func computeCounts() async {
+        guard photosGranted else { countsReady = false; return }
+        var result: [String: Int] = [:]
+        for event in events { result[event.id] = PhotoMatcher.shared.count(from: event.start, to: event.end) }
+        counts = result
+        countsReady = true
+    }
+
+    // MARK: - Grabber (drag to expand)
 
     private var handle: some View {
         VStack(spacing: 8) {
@@ -51,20 +69,27 @@ struct DayEventsPanel: View {
         .padding(.bottom, 10)
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) { expanded.toggle() }
-        }
+        .onTapGesture { setExpanded(!expanded) }
         .gesture(
-            DragGesture(minimumDistance: 4)
-                .updating($dragTranslation) { value, state, _ in state = value.translation.height }
+            DragGesture(minimumDistance: 6)
+                .onChanged { value in dragOffset = value.translation.height }
                 .onEnded { value in
-                    let projected = (expanded ? fullHeight : peekHeight) - value.translation.height
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
-                        expanded = projected > (peekHeight + fullHeight) / 2
+                    // Velocity-aware: a single upward flick fully expands (or collapses).
+                    let projected = (expanded ? fullHeight : peekHeight) - value.predictedEndTranslation.height
+                    let willExpand = projected > (peekHeight + fullHeight) / 2
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
+                        expanded = willExpand
+                        dragOffset = 0
                     }
                 }
         )
     }
+
+    private func setExpanded(_ value: Bool) {
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { expanded = value }
+    }
+
+    // MARK: - Events list
 
     private var eventsList: some View {
         ScrollView {
@@ -76,8 +101,18 @@ struct DayEventsPanel: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 6)
                 } else {
-                    ForEach(events) { event in
-                        DayEventRow(event: event, onEdit: { onEdit(event) }, onHide: { onHide(event) })
+                    ForEach(feedItems) { item in
+                        switch item {
+                        case .event(let event):
+                            DayEventRow(
+                                event: event,
+                                photoCount: counts[event.id] ?? -1,
+                                onEdit: { onEdit(event) },
+                                onHide: { onHide(event) }
+                            )
+                        case .empties(let group):
+                            EmptiesGroupView(events: group, onEdit: onEdit, onHide: onHide)
+                        }
                     }
                 }
             }
@@ -85,11 +120,42 @@ struct DayEventsPanel: View {
             .padding(.bottom, 100)
         }
     }
+
+    private var feedItems: [DayFeedItem] {
+        guard photosGranted, countsReady else { return events.map { .event($0) } }
+        var items: [DayFeedItem] = []
+        var group: [HangoutEvent] = []
+        func flush() { if !group.isEmpty { items.append(.empties(group)); group = [] } }
+        for event in events {
+            if (counts[event.id] ?? 1) > 0 {
+                flush()
+                items.append(.event(event))
+            } else {
+                group.append(event)
+            }
+        }
+        flush()
+        return items
+    }
 }
 
-/// One event inside the day panel — tap to expand and reveal its photos.
+private enum DayFeedItem: Identifiable {
+    case event(HangoutEvent)
+    case empties([HangoutEvent])
+
+    var id: String {
+        switch self {
+        case .event(let e):   return "e-\(e.id)"
+        case .empties(let g): return "g-\(g.first?.id ?? "")-\(g.count)"
+        }
+    }
+}
+
+/// One photo-having event inside the day panel — tap to expand and reveal its
+/// photos. Shows a photo count badge so you know it has some without expanding.
 private struct DayEventRow: View {
     let event: HangoutEvent
+    var photoCount: Int = -1
     var onEdit: () -> Void
     var onHide: () -> Void
 
@@ -160,6 +226,14 @@ private struct DayEventRow: View {
                 Image(systemName: "g.circle").font(.caption2).foregroundStyle(.secondary)
             }
             Spacer()
+            if photoCount > 0 {
+                HStack(spacing: 3) {
+                    Text("\(photoCount)")
+                    Image(systemName: "photo")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
             Text(event.isAllDay ? "All-day" : event.start.formatted(.dateTime.hour().minute()))
                 .foregroundStyle(.secondary)
             Image(systemName: "chevron.down")
