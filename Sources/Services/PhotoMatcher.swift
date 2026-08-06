@@ -34,6 +34,17 @@ final class PhotoMatcher {
         return assets
     }
 
+    /// Fast count of photos/videos in [start, end] without loading the assets.
+    func count(from start: Date, to end: Date) -> Int {
+        guard end > start else { return 0 }
+        let options = PHFetchOptions()
+        options.predicate = NSPredicate(
+            format: "creationDate >= %@ AND creationDate <= %@",
+            start as NSDate, end as NSDate
+        )
+        return PHAsset.fetchAssets(with: options).count
+    }
+
     func requestThumbnail(for asset: PHAsset, targetSize: CGSize, completion: @escaping (UIImage?) -> Void) {
         let options = PHImageRequestOptions()
         options.deliveryMode = .opportunistic

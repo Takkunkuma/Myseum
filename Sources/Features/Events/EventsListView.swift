@@ -15,8 +15,14 @@ struct EventsListView: View {
     @State private var isSelecting = false
     @State private var selectedIDs: Set<String> = []
     @State private var removalStyle: RemovalStyle = .shrink
+    @State private var mode: FeedFilter = .all
+    @State private var photoCounts: [String: Int] = [:]
+    @State private var countsReady = false
 
     private enum RemovalStyle { case shrink, slide }
+
+    private var photoGranted: Bool { photoStatus == .authorized || photoStatus == .limited }
+    private var showFilterToggle: Bool { photoGranted && countsReady && !isSelecting }
 
     var body: some View {
         NavigationStack {
@@ -40,17 +46,16 @@ struct EventsListView: View {
                                 )
                                 .padding(.top, 40)
                             } else {
-                                ForEach(store.events) { event in
-                                    EventRowView(
-                                        event: event,
-                                        onEdit: { editingEvent = event },
-                                        onDelete: { pendingDelete = event },
-                                        onHide: { hide([event.id]) },
-                                        selectionMode: isSelecting,
-                                        isSelected: selectedIDs.contains(event.id),
-                                        onToggleSelect: { toggleSelect(event.id) }
-                                    )
-                                    .transition(.asymmetric(insertion: .identity, removal: currentRemoval))
+                                if showFilterToggle {
+                                    Picker("", selection: $mode) {
+                                        Text("All events").tag(FeedFilter.all)
+                                        Text("With photos").tag(FeedFilter.withPhotos)
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .padding(.bottom, 2)
+                                }
+                                ForEach(feedItems) { item in
+                                    feedRow(item)
                                 }
                             }
                         }
@@ -85,10 +90,10 @@ struct EventsListView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showEditor, onDismiss: { Task { await store.refresh() } }) {
+            .sheet(isPresented: $showEditor, onDismiss: { Task { await store.refresh(); await computeCounts() } }) {
                 EventEditorView(initialDate: Date())
             }
-            .sheet(item: $editingEvent, onDismiss: { Task { await store.refresh() } }) { event in
+            .sheet(item: $editingEvent, onDismiss: { Task { await store.refresh(); await computeCounts() } }) { event in
                 EventEditorView(editing: event)
             }
             .confirmationDialog("Delete this event?", isPresented: deleteDialogBinding, titleVisibility: .visible, presenting: pendingDelete) { event in
@@ -97,6 +102,60 @@ struct EventsListView: View {
             .task { await loadEverything() }
             .refreshable { await loadEverything() }
         }
+    }
+
+    /// Groups consecutive photo-less events together. No grouping while selecting,
+    /// before counts are ready, or without photo access.
+    private var feedItems: [FeedItem] {
+        guard photoGranted, countsReady, !isSelecting else {
+            return store.events.map { .event($0) }
+        }
+        var items: [FeedItem] = []
+        var group: [HangoutEvent] = []
+        func flush() { if !group.isEmpty { items.append(.empties(group)); group = [] } }
+        for event in store.events {
+            if (photoCounts[event.id] ?? 1) > 0 {   // unknown → treat as having photos
+                flush()
+                items.append(.event(event))
+            } else {
+                if mode == .withPhotos { continue }
+                group.append(event)
+            }
+        }
+        flush()
+        return items
+    }
+
+    @ViewBuilder private func feedRow(_ item: FeedItem) -> some View {
+        switch item {
+        case .event(let event):
+            EventRowView(
+                event: event,
+                onEdit: { editingEvent = event },
+                onDelete: { pendingDelete = event },
+                onHide: { hide([event.id]) },
+                selectionMode: isSelecting,
+                isSelected: selectedIDs.contains(event.id),
+                onToggleSelect: { toggleSelect(event.id) }
+            )
+            .transition(.asymmetric(insertion: .identity, removal: currentRemoval))
+        case .empties(let group):
+            EmptiesGroupView(
+                events: group,
+                onEdit: { editingEvent = $0 },
+                onHide: { hide([$0.id]) }
+            )
+        }
+    }
+
+    private func computeCounts() async {
+        guard photoGranted else { return }
+        var counts: [String: Int] = [:]
+        for event in store.events {
+            counts[event.id] = PhotoMatcher.shared.count(from: event.start, to: event.end)
+        }
+        photoCounts = counts
+        countsReady = true
     }
 
     private func toggleSelect(_ id: String) {
@@ -176,7 +235,83 @@ struct EventsListView: View {
             photoStatus = await PhotoMatcher.shared.requestAccess()
         }
         await store.refresh()
+        await computeCounts()
         if auth.isAuthenticated { await shares.loadPending() }
+    }
+}
+
+private enum FeedFilter { case all, withPhotos }
+
+private enum FeedItem: Identifiable {
+    case event(HangoutEvent)
+    case empties([HangoutEvent])
+
+    var id: String {
+        switch self {
+        case .event(let e):   return "e-\(e.id)"
+        case .empties(let g): return "g-\(g.first?.id ?? "")-\(g.count)"
+        }
+    }
+}
+
+/// Photo-less events shown as quiet plain lines under a "No photos" label. When a
+/// run has more than four, it collapses into a tappable summary.
+private struct EmptiesGroupView: View {
+    let events: [HangoutEvent]
+    var onEdit: (HangoutEvent) -> Void
+    var onHide: (HangoutEvent) -> Void
+
+    @State private var expanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            if events.count > 4 {
+                Button {
+                    withAnimation(.snappy) { expanded.toggle() }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "photo").font(.caption).foregroundStyle(.tertiary)
+                        Text("\(events.count) events with no photos")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                        Spacer()
+                        Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                            .font(.caption2).foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if expanded { lines }
+            } else {
+                Text("No photos").font(.caption).foregroundStyle(.tertiary).padding(.leading, 2)
+                lines
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 2)
+    }
+
+    private var lines: some View {
+        ForEach(events) { event in
+            HStack(spacing: 9) {
+                Circle().fill(.secondary.opacity(0.5)).frame(width: 5, height: 5)
+                Text(event.title).font(.subheadline).foregroundStyle(.secondary)
+                if event.source == .google {
+                    Image(systemName: "g.circle").font(.caption2).foregroundStyle(.tertiary)
+                }
+                Spacer()
+                Text(event.isAllDay ? "All-day" : event.start.formatted(.dateTime.hour().minute()))
+                    .font(.caption).foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+            .onTapGesture { if event.isEditable { onEdit(event) } }
+            .contextMenu {
+                if event.isEditable {
+                    Button { onEdit(event) } label: { Label("Edit", systemImage: "pencil") }
+                }
+                Button { onHide(event) } label: { Label("Hide from Myseum", systemImage: "eye.slash") }
+            }
+        }
     }
 }
 
