@@ -13,16 +13,19 @@ event, like a visual diary. Inspired by Slopes' ski-trip photo grouping.
 - **GoogleSignIn** for Google sign-in + calendar
 - **APNs** push via a Supabase Edge Function
 
-## Features
-- Events, Calendar, and Account tabs with a Liquid-Glass floating nav
-- Photos/videos matched to events by capture time; remove a photo from an event
-- Create / edit / delete events (Apple Calendar, or an in-app local store when there's no calendar)
-- Calendar month grid with a pull-up day sheet; expand an event to see its photos
-- Search events by name and date
-- Hide individual events, multi-select, and hide whole recurring series
-- Accounts, profile photo + username, friends via link/QR, shared event invites
-- Push notifications on event invites
-- Theme color, custom app icon
+## The core idea
+
+You already keep a calendar. You already take photos. Myseum is the thread between
+them.
+
+Whatever you capture during an event's time window — brunch with a friend, a
+weekend trip, someone's birthday — is automatically gathered under that event. No
+albums to make, no tagging, no sorting. You just live the day; the photos and
+videos find their way home to the moment they belong to.
+
+The result is a calendar that remembers. Each event becomes an exhibit, and your
+past turns into a museum you can walk back through — a diary written entirely in
+the pictures you were already taking.
 
 ## Getting started
 1. Install XcodeGen: `brew install xcodegen`
