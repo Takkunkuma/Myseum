@@ -15,18 +15,17 @@ event, like a visual diary. Inspired by Slopes' ski-trip photo grouping.
 
 ## The core idea
 
-You already keep a calendar. You already take photos. Myseum is the thread between
-them.
+Myseum is the thread between your calendar events and photos.
 
-We all scroll back through our camera roll to reminisce — to relive a trip, a
-night out, a person. But the camera roll is one long, contextless stream. Myseum
-links that looking-back to the events the memories actually happened at, so
-reminiscing means revisiting the moment, not just the picture.
+Many of us scroll back through camera roll to reminisce, to relive a trip, a night
+out, a person, or even tell stories to friends. But the camera roll is one long,
+contextless stream. Myseum links that looking-back to the events the memories
+actually happened at, so reminiscing means revisiting the moment, not just the
+picture.
 
-Whatever you capture during an event's time window — brunch with a friend, a
-weekend trip, someone's birthday — is automatically gathered under that event. No
-albums to make, no tagging, no sorting. You just live the day; the photos and
-videos find their way home to the moment they belong to.
+Whatever you capture during an event is automatically gathered under that event. No
+albums to make, no tagging, no sorting. The photos and videos find their way home
+to the moment they belong to.
 
 The result is a calendar that remembers. Each event becomes an exhibit, and your
 past turns into a museum you can walk back through — a diary written entirely in
