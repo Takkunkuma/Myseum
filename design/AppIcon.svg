@@ -1,0 +1,42 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<clipPath id="phL"><rect x="-36" y="318" width="304" height="388" rx="10"/></clipPath>
+<clipPath id="phC"><rect x="360" y="318" width="304" height="388" rx="10"/></clipPath>
+<clipPath id="phR"><rect x="756" y="318" width="304" height="388" rx="10"/></clipPath>
+<clipPath id="canvas"><rect x="0" y="0" width="1024" height="1024"/></clipPath>
+</defs>
+<g clip-path="url(#canvas)">
+<rect x="0" y="0" width="1024" height="1024" fill="#C2502F"/>
+<rect x="0" y="820" width="1024" height="204" fill="#A53F1E"/>
+<rect x="0" y="812" width="1024" height="9" fill="#8E3415"/>
+
+<rect x="-64" y="290" width="360" height="444" rx="20" fill="#F5ECDC"/>
+<g clip-path="url(#phL)">
+<rect x="-36" y="318" width="304" height="388" fill="#F7D7A0"/>
+<circle cx="176" cy="432" r="58" fill="#EC6A3C"/>
+<path d="M-36 602 Q120 520 268 590 L268 706 L-36 706 Z" fill="#6E4733"/>
+</g>
+
+<rect x="728" y="290" width="360" height="444" rx="20" fill="#F5ECDC"/>
+<g clip-path="url(#phR)">
+<rect x="756" y="318" width="304" height="388" fill="#2E3A57"/>
+<path d="M756 650 Q880 610 1060 652 L1060 706 L756 706 Z" fill="#243150"/>
+<circle cx="852" cy="420" r="58" fill="#EAD9BC"/>
+<circle cx="812" cy="520" r="6" fill="#EAD9BC"/>
+<circle cx="900" cy="498" r="5" fill="#EAD9BC"/>
+</g>
+
+<rect x="332" y="290" width="360" height="444" rx="20" fill="#F5ECDC"/>
+<g clip-path="url(#phC)">
+<rect x="360" y="318" width="304" height="388" fill="#2E86AB"/>
+<rect x="360" y="318" width="304" height="190" fill="#D2EAF0"/>
+<path d="M360 500 C405 462 462 462 506 496 C540 522 584 522 618 496 C636 484 650 486 664 494 L664 542 C650 536 636 536 622 546 C584 574 540 574 508 546 C462 510 408 512 374 550 L360 550 Z" fill="#FFFFFF"/>
+<rect x="360" y="542" width="304" height="164" fill="#1B6A8E"/>
+<path d="M378 602 Q462 578 540 602 T660 602" fill="none" stroke="#6FB8D6" stroke-width="12" stroke-linecap="round"/>
+<path d="M378 656 Q462 632 540 656 T656 656" fill="none" stroke="#6FB8D6" stroke-width="12" stroke-linecap="round"/>
+<circle cx="470" cy="478" r="9" fill="#FFFFFF"/>
+<circle cx="526" cy="472" r="8" fill="#FFFFFF"/>
+<circle cx="586" cy="480" r="8" fill="#FFFFFF"/>
+</g>
+</g>
+</svg>
