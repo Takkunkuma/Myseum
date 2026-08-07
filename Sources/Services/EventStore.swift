@@ -33,6 +33,8 @@ final class EventStore {
     private let forwardMonths = 3
     private var backMonthsLoaded = 0
     private var loadedMonthKey: Int?
+    /// Whether Google was connected for the currently loaded feed.
+    private var loadedWithGoogle = false
 
     // MARK: - Access
 
@@ -46,11 +48,15 @@ final class EventStore {
 
     // MARK: - Feed window (Events tab)
 
-    /// First load of the feed: the most recent `pageMonths` of history.
+    /// First load of the feed: the most recent `pageMonths` of history. Also
+    /// re-runs if the set of connected sources changed since the last load (e.g.
+    /// Google finished connecting), so we never sit on an empty first fetch.
     func loadFeed() async {
-        guard !hasLoadedFeed else { return }
-        backMonthsLoaded = pageMonths
+        let googleConnected = GoogleCalendarService.shared.isConnected
+        guard !hasLoadedFeed || googleConnected != loadedWithGoogle else { return }
+        if !hasLoadedFeed { backMonthsLoaded = pageMonths }
         await reloadFeedWindow()
+        loadedWithGoogle = googleConnected
         hasLoadedFeed = true
     }
 

@@ -256,6 +256,9 @@ struct EventsListView: View {
     private func loadEverything() async {
         guard isActive, !didLoad else { return }
         didLoad = true
+        // Wait for the Google session to be restored, otherwise the first fetch
+        // runs while Google still looks disconnected and comes back empty.
+        await AppBootstrap.shared.ready()
         if !store.authorized { await store.requestAccess() }
         if photoStatus == .notDetermined {
             photoStatus = await PhotoMatcher.shared.requestAccess()

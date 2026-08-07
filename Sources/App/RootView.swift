@@ -33,10 +33,7 @@ struct RootView: View {
         .sheet(isPresented: $showSearch) { SearchView() }
         .task { await AuthService.shared.start() }
         .task { await NotificationService.shared.requestAuthorizationAndRegister() }
-        .task {
-            await GoogleAuthManager.shared.restorePreviousSignIn()
-            GoogleCalendarService.shared.refreshConnectionState()
-        }
+        .task { await AppBootstrap.shared.ready() }
         .onOpenURL { url in
             if GoogleAuthManager.shared.handle(url) { return }
             handleInvite(url)

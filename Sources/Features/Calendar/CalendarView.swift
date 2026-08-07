@@ -53,8 +53,9 @@ struct CalendarView: View {
             }
             .task(id: isActive) {
                 guard isActive else { return }
+                await AppBootstrap.shared.ready()
                 if !store.authorized { await store.requestAccess() }
-                await store.loadMonth(displayedMonth)
+                await store.loadMonth(displayedMonth, force: true)
             }
             .task(id: monthKey) {
                 guard isActive else { return }
