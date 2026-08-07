@@ -2,6 +2,25 @@
 
 TestFlight "What to Test" copy, newest first.
 
+## Build 8
+
+**Fixed: app opened empty**
+- The Events list used to show "No events yet" on launch until you pulled to
+  refresh. It now loads on its own.
+
+**Tap to jump back to the top**
+- Scrolled far down? Tap the Events tab again to return to the top.
+
+**Tidier headers**
+- The title now shares a row with the buttons on every tab, so there's more
+  room for content (Calendar shows about an extra week).
+- On Events, Select and + moved into a ⋯ menu beside the title.
+
+**Please try**
+1. Force-quit and reopen — do your events appear without pulling to refresh?
+2. Scroll deep into Events, then tap the Events tab to snap back up.
+3. The ⋯ menu on Events — Add event and Select events both there?
+
 ## Build 7
 
 **Much faster**
