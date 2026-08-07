@@ -3,6 +3,9 @@ import SwiftUI
 /// Calendar tab: a simple but roomy month grid. Tap a day to see its events
 /// (compact list) and tap + to add one. Month changes slide horizontally.
 struct CalendarView: View {
+    /// False until the user first opens this tab — keeps it idle in the pager.
+    var isActive: Bool = true
+
     @State private var store = EventStore.shared
     @State private var displayedMonth = Date()
     @State private var selectedDay = Calendar.current.startOfDay(for: Date())
@@ -48,9 +51,14 @@ struct CalendarView: View {
             .sheet(item: $editingEvent, onDismiss: { Task { await store.refresh() } }) { event in
                 EventEditorView(editing: event)
             }
-            .task {
+            .task(id: isActive) {
+                guard isActive else { return }
                 if !store.authorized { await store.requestAccess() }
-                await store.refresh()
+                await store.loadMonth(displayedMonth)
+            }
+            .task(id: monthKey) {
+                guard isActive else { return }
+                await store.loadMonth(displayedMonth)
             }
         }
     }

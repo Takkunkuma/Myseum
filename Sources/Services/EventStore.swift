@@ -13,10 +13,26 @@ final class EventStore {
 
     private let store = EKEventStore()
 
+    /// Events shown in the Events feed — a rolling window that grows as you scroll.
     var events: [HangoutEvent] = []
+    /// Events for the month the Calendar tab is showing (plus neighbouring months).
+    var monthEvents: [HangoutEvent] = []
+    /// Lightweight index across a wide range, built lazily for Search.
+    var searchIndex: [HangoutEvent] = []
     /// Distinct recurring series found across all calendars (for the settings list).
     var recurringSeries: [RecurringSeries] = []
     var authorized = false
+
+    private(set) var hasLoadedFeed = false
+    private(set) var isLoadingMore = false
+    private(set) var canLoadMore = true
+
+    /// Months of history added per page, and how far back we've loaded so far.
+    private let pageMonths = 3
+    private let maxBackMonths = 36
+    private let forwardMonths = 3
+    private var backMonthsLoaded = 0
+    private var loadedMonthKey: Int?
 
     // MARK: - Access
 
@@ -26,17 +42,71 @@ final class EventStore {
         } catch {
             authorized = false
         }
-        await refresh()
     }
 
-    // MARK: - Reading
+    // MARK: - Feed window (Events tab)
 
-    func refresh(monthsBack: Int = 18, monthsForward: Int = 6) async {
+    /// First load of the feed: the most recent `pageMonths` of history.
+    func loadFeed() async {
+        guard !hasLoadedFeed else { return }
+        backMonthsLoaded = pageMonths
+        await reloadFeedWindow()
+        hasLoadedFeed = true
+    }
+
+    /// Extends the window another page further back.
+    func loadMoreFeed() async {
+        guard canLoadMore, !isLoadingMore, hasLoadedFeed else { return }
+        isLoadingMore = true
+        backMonthsLoaded = min(backMonthsLoaded + pageMonths, maxBackMonths)
+        await reloadFeedWindow()
+        isLoadingMore = false
+    }
+
+    /// Re-fetches whatever is currently loaded (feed window + calendar month).
+    func refresh() async {
+        if hasLoadedFeed { await reloadFeedWindow() }
+        if let key = loadedMonthKey { await loadMonth(Self.date(fromKey: key), force: true) }
+    }
+
+    private func reloadFeedWindow() async {
         let cal = Calendar.current
         let now = Date()
-        let start = cal.date(byAdding: .month, value: -monthsBack, to: now) ?? now
-        let end = cal.date(byAdding: .month, value: monthsForward, to: now) ?? now
+        let start = cal.date(byAdding: .month, value: -backMonthsLoaded, to: now) ?? now
+        let end = cal.date(byAdding: .month, value: forwardMonths, to: now) ?? now
+        events = await fetchEvents(from: start, to: end)
+        canLoadMore = backMonthsLoaded < maxBackMonths
+    }
 
+    // MARK: - Calendar month
+
+    /// Loads the displayed month plus its neighbours (so month swipes are instant).
+    func loadMonth(_ month: Date, force: Bool = false) async {
+        let key = Self.monthKey(month)
+        guard force || key != loadedMonthKey else { return }
+        loadedMonthKey = key
+        let cal = Calendar.current
+        guard let interval = cal.dateInterval(of: .month, for: month) else { return }
+        let start = cal.date(byAdding: .month, value: -1, to: interval.start) ?? interval.start
+        let end = cal.date(byAdding: .month, value: 1, to: interval.end) ?? interval.end
+        monthEvents = await fetchEvents(from: start, to: end)
+    }
+
+    // MARK: - Search index
+
+    /// Titles + dates across a wide range. Cheap: no photo matching happens here.
+    func loadSearchIndex() async {
+        let cal = Calendar.current
+        let now = Date()
+        let start = cal.date(byAdding: .month, value: -maxBackMonths, to: now) ?? now
+        let end = cal.date(byAdding: .month, value: forwardMonths, to: now) ?? now
+        searchIndex = await fetchEvents(from: start, to: end)
+    }
+
+    // MARK: - Fetching
+
+    /// Merges EventKit + local + Google events for a range, filtering hidden ones.
+    private func fetchEvents(from start: Date, to end: Date) async -> [HangoutEvent] {
         var merged: [HangoutEvent] = []
 
         if authorized {
@@ -68,12 +138,14 @@ final class EventStore {
                 seriesMap[key] = RecurringSeries(id: key, title: event.title, source: event.source)
             }
         }
-        recurringSeries = seriesMap.values.sorted {
-            $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        if !seriesMap.isEmpty || recurringSeries.isEmpty {
+            recurringSeries = seriesMap.values.sorted {
+                $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+            }
         }
 
         let hidden = HiddenEventsStore.shared
-        events = merged
+        return merged
             .filter { event in
                 if hidden.isHidden(event.id) { return false }
                 if let key = event.seriesKey, hidden.isSeriesHidden(key) { return false }
@@ -82,16 +154,31 @@ final class EventStore {
             .sorted { $0.start > $1.start }   // newest first
     }
 
+    // MARK: - Day lookups (Calendar tab, backed by monthEvents)
+
     func events(on day: Date) -> [HangoutEvent] {
         let (dayStart, dayEnd) = Self.dayBounds(day)
-        return events
+        return monthEvents
             .filter { $0.start < dayEnd && $0.end > dayStart }   // overlaps the day
             .sorted { $0.start < $1.start }
     }
 
     func hasEvents(on day: Date) -> Bool {
         let (dayStart, dayEnd) = Self.dayBounds(day)
-        return events.contains { $0.start < dayEnd && $0.end > dayStart }
+        return monthEvents.contains { $0.start < dayEnd && $0.end > dayStart }
+    }
+
+    private static func monthKey(_ date: Date) -> Int {
+        let cal = Calendar.current
+        return cal.component(.year, from: date) * 100 + cal.component(.month, from: date)
+    }
+
+    private static func date(fromKey key: Int) -> Date {
+        var components = DateComponents()
+        components.year = key / 100
+        components.month = key % 100
+        components.day = 1
+        return Calendar.current.date(from: components) ?? Date()
     }
 
     private static func dayBounds(_ day: Date) -> (Date, Date) {

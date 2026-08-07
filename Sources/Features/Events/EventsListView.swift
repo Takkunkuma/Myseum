@@ -4,6 +4,9 @@ import Photos
 /// Events tab: incoming invites (if any) on top, then your events newest →
 /// oldest, each with its photo log.
 struct EventsListView: View {
+    /// False until the user first opens this tab — keeps it idle in the pager.
+    var isActive: Bool = true
+
     @State private var store = EventStore.shared
     @State private var shares = EventShareService.shared
     @State private var auth = AuthService.shared
@@ -18,6 +21,8 @@ struct EventsListView: View {
     @State private var mode: FeedFilter = .all
     @State private var photoCounts: [String: Int] = [:]
     @State private var countsReady = false
+    @State private var didLoad = false
+    @State private var ready = false
 
     private enum RemovalStyle { case shrink, slide }
 
@@ -27,7 +32,10 @@ struct EventsListView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if !store.authorized && !gcal.isConnected {
+                if !ready {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if !store.authorized && !gcal.isConnected {
                     permissionPrompt
                 } else {
                     ScrollView {
@@ -56,6 +64,12 @@ struct EventsListView: View {
                                 }
                                 ForEach(feedItems) { item in
                                     feedRow(item)
+                                }
+                                if store.canLoadMore {
+                                    ProgressView()
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 12)
+                                        .onAppear { Task { await loadMore() } }
                                 }
                             }
                         }
@@ -90,17 +104,17 @@ struct EventsListView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showEditor, onDismiss: { Task { await store.refresh(); await computeCounts() } }) {
+            .sheet(isPresented: $showEditor, onDismiss: { Task { await reload() } }) {
                 EventEditorView(initialDate: Date())
             }
-            .sheet(item: $editingEvent, onDismiss: { Task { await store.refresh(); await computeCounts() } }) { event in
+            .sheet(item: $editingEvent, onDismiss: { Task { await reload() } }) { event in
                 EventEditorView(editing: event)
             }
             .confirmationDialog("Delete this event?", isPresented: deleteDialogBinding, titleVisibility: .visible, presenting: pendingDelete) { event in
                 Button("Delete Event", role: .destructive) { delete(event) }
             }
-            .task { await loadEverything() }
-            .refreshable { await loadEverything() }
+            .task(id: isActive) { await loadEverything() }
+            .refreshable { await reload() }
         }
     }
 
@@ -148,12 +162,14 @@ struct EventsListView: View {
         }
     }
 
+    /// One photo-library query for the whole window, bucketed per event off the
+    /// main thread — instead of one query per event on the main thread.
     private func computeCounts() async {
-        guard photoGranted else { return }
-        var counts: [String: Int] = [:]
-        for event in store.events {
-            counts[event.id] = PhotoMatcher.shared.count(from: event.start, to: event.end)
-        }
+        guard photoGranted else { countsReady = true; return }
+        let events = store.events
+        let counts = await Task.detached(priority: .userInitiated) {
+            PhotoMatcher.photoCounts(for: events)
+        }.value
         photoCounts = counts
         countsReady = true
     }
@@ -229,14 +245,31 @@ struct EventsListView: View {
         }
     }
 
+    /// Runs once, the first time the tab is opened.
     private func loadEverything() async {
+        guard isActive, !didLoad else { return }
+        didLoad = true
         if !store.authorized { await store.requestAccess() }
         if photoStatus == .notDetermined {
             photoStatus = await PhotoMatcher.shared.requestAccess()
         }
+        await store.loadFeed()
+        await computeCounts()
+        ready = true
+        if auth.isAuthenticated { await shares.loadPending() }
+    }
+
+    /// Pull-to-refresh re-fetches the window that's already loaded.
+    private func reload() async {
         await store.refresh()
         await computeCounts()
         if auth.isAuthenticated { await shares.loadPending() }
+    }
+
+    private func loadMore() async {
+        guard store.canLoadMore, !store.isLoadingMore else { return }
+        await store.loadMoreFeed()
+        await computeCounts()
     }
 }
 

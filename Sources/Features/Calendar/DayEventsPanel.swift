@@ -43,10 +43,11 @@ struct DayEventsPanel: View {
     private var eventsKey: String { events.map(\.id).joined(separator: ",") }
 
     private func computeCounts() async {
-        guard photosGranted else { countsReady = false; return }
-        var result: [String: Int] = [:]
-        for event in events { result[event.id] = PhotoMatcher.shared.count(from: event.start, to: event.end) }
-        counts = result
+        guard photosGranted, !events.isEmpty else { countsReady = false; return }
+        let events = events
+        counts = await Task.detached(priority: .userInitiated) {
+            PhotoMatcher.photoCounts(for: events)
+        }.value
         countsReady = true
     }
 

@@ -10,14 +10,14 @@ struct RootView: View {
     @State private var inviteResult: String?
     @State private var showInviteResult = false
     @State private var showSearch = false
+    /// Tabs the user has opened — an unvisited tab stays idle until first shown.
+    @State private var visited: Set<AppTab> = [.initial]
 
     private var theme: ThemeColor { ThemeColor.current(from: themeRaw) }
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            page
-                .id(selection)
-                .transition(slide)
+            pager
 
             HStack(spacing: 10) {
                 GlassTabBar(selection: selection, onSelect: select)
@@ -36,7 +36,6 @@ struct RootView: View {
         .task {
             await GoogleAuthManager.shared.restorePreviousSignIn()
             GoogleCalendarService.shared.refreshConnectionState()
-            await EventStore.shared.refresh()
         }
         .onOpenURL { url in
             if GoogleAuthManager.shared.handle(url) { return }
@@ -49,19 +48,22 @@ struct RootView: View {
         }
     }
 
-    @ViewBuilder private var page: some View {
-        switch selection {
-        case .events:   EventsListView()
-        case .calendar: CalendarView()
-        case .account:  AccountView()
+    /// All three tabs live side by side and the row slides — so each keeps its
+    /// identity (and therefore its state, scroll position and loaded data) instead
+    /// of being torn down and rebuilt on every switch.
+    private var pager: some View {
+        GeometryReader { geo in
+            HStack(spacing: 0) {
+                EventsListView(isActive: visited.contains(.events))
+                    .frame(width: geo.size.width)
+                CalendarView(isActive: visited.contains(.calendar))
+                    .frame(width: geo.size.width)
+                AccountView()
+                    .frame(width: geo.size.width)
+            }
+            .frame(width: geo.size.width * CGFloat(AppTab.allCases.count), alignment: .leading)
+            .offset(x: -CGFloat(selection.rawValue) * geo.size.width)
         }
-    }
-
-    private var slide: AnyTransition {
-        .asymmetric(
-            insertion: .move(edge: forward ? .trailing : .leading),
-            removal:   .move(edge: forward ? .leading : .trailing)
-        )
     }
 
     private func select(_ tab: AppTab) {
@@ -69,6 +71,7 @@ struct RootView: View {
         forward = tab.rawValue > selection.rawValue
         withAnimation(.smooth(duration: 0.35)) {
             selection = tab
+            visited.insert(tab)   // a tab starts loading the first time it's opened
         }
     }
 

@@ -10,7 +10,7 @@ struct SearchView: View {
     @State private var date = Date()
 
     private var results: [HangoutEvent] {
-        store.events.filter { event in
+        store.searchIndex.filter { event in
             let matchesText = query.isEmpty
                 || event.title.localizedCaseInsensitiveContains(query.trimmingCharacters(in: .whitespaces))
             let matchesDate = !useDate || overlaps(event, day: date)
@@ -41,6 +41,7 @@ struct SearchView: View {
                 }
                 .padding()
             }
+            .task { await store.loadSearchIndex() }
             .searchable(text: $query, prompt: "Search event names")
             .navigationTitle("Search")
             .navigationBarTitleDisplayMode(.inline)
