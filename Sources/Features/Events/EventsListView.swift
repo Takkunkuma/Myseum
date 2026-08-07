@@ -62,14 +62,21 @@ struct EventsListView: View {
                                     .pickerStyle(.segmented)
                                     .padding(.bottom, 2)
                                 }
-                                ForEach(feedItems) { item in
+                                let items = feedItems
+                                ForEach(items) { item in
                                     feedRow(item)
+                                        // Triggering from the last row (rather than a
+                                        // static footer) means this re-fires as each
+                                        // new page arrives and shifts the last item.
+                                        .onAppear {
+                                            guard item.id == items.last?.id else { return }
+                                            Task { await loadMore() }
+                                        }
                                 }
-                                if store.canLoadMore {
+                                if store.isLoadingMore {
                                     ProgressView()
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 12)
-                                        .onAppear { Task { await loadMore() } }
                                 }
                             }
                         }
