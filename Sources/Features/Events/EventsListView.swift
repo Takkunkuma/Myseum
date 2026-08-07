@@ -6,6 +6,8 @@ import Photos
 struct EventsListView: View {
     /// False until the user first opens this tab — keeps it idle in the pager.
     var isActive: Bool = true
+    /// Changes when the Events tab is tapped while already open — scroll to top.
+    var scrollToTop: Int = 0
 
     @State private var store = EventStore.shared
     @State private var shares = EventShareService.shared
@@ -26,6 +28,8 @@ struct EventsListView: View {
 
     private enum RemovalStyle { case shrink, slide }
 
+    private static let topAnchor = "feed-top"
+
     private var photoGranted: Bool { photoStatus == .authorized || photoStatus == .limited }
     private var showFilterToggle: Bool { photoGranted && countsReady && !isSelecting }
 
@@ -38,8 +42,10 @@ struct EventsListView: View {
                 } else if !store.authorized && !gcal.isConnected {
                     permissionPrompt
                 } else {
+                    ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 14) {
+                            Color.clear.frame(height: 0).id(Self.topAnchor)
                             ForEach(shares.pending) { invite in
                                 InviteCard(invite: invite) { accept in
                                     Task { try? await shares.respond(to: invite, accept: accept); await store.refresh() }
@@ -83,6 +89,12 @@ struct EventsListView: View {
                         .padding()
                     }
                     .contentMargins(.bottom, 96, for: .scrollContent)
+                    .onChange(of: scrollToTop) { _, _ in
+                        withAnimation(.easeOut(duration: 0.35)) {
+                            proxy.scrollTo(Self.topAnchor, anchor: .top)
+                        }
+                    }
+                    }
                 }
             }
             .navigationTitle(isSelecting ? "\(selectedIDs.count) selected" : "Events")

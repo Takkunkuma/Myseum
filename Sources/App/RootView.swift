@@ -12,6 +12,8 @@ struct RootView: View {
     @State private var showSearch = false
     /// Tabs the user has opened — an unvisited tab stays idle until first shown.
     @State private var visited: Set<AppTab> = [.initial]
+    /// Bumped when the active tab is tapped again, asking it to scroll to the top.
+    @State private var scrollToTop = 0
 
     private var theme: ThemeColor { ThemeColor.current(from: themeRaw) }
 
@@ -51,7 +53,7 @@ struct RootView: View {
     private var pager: some View {
         GeometryReader { geo in
             HStack(spacing: 0) {
-                EventsListView(isActive: visited.contains(.events))
+                EventsListView(isActive: visited.contains(.events), scrollToTop: scrollToTop)
                     .frame(width: geo.size.width)
                 CalendarView(isActive: visited.contains(.calendar))
                     .frame(width: geo.size.width)
@@ -64,7 +66,11 @@ struct RootView: View {
     }
 
     private func select(_ tab: AppTab) {
-        guard tab != selection else { return }
+        // Tapping the tab you're already on scrolls it back to the top.
+        guard tab != selection else {
+            scrollToTop += 1
+            return
+        }
         forward = tab.rawValue > selection.rawValue
         withAnimation(.smooth(duration: 0.35)) {
             selection = tab
