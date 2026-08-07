@@ -18,3 +18,6 @@ Sources/Config/Secrets.swift
 
 # macOS
 .DS_Store
+
+# Supabase CLI local state
+supabase/.temp/

@@ -19,7 +19,7 @@ Run `supabase/schema_d3.sql` in the SQL Editor (creates `device_tokens`).
 ```sh
 # from the Myseum/ folder, with the Supabase CLI installed
 supabase login
-supabase link --project-ref zhqzpzjgdfoszkkkuurs
+supabase link --project-ref YOUR-PROJECT-REF
 supabase functions deploy notify-invite --no-verify-jwt
 
 supabase secrets set \

@@ -14,7 +14,7 @@ set search_path = public, net, extensions
 as $$
 begin
     perform net.http_post(
-        url     := 'https://zhqzpzjgdfoszkkkuurs.supabase.co/functions/v1/notify-invite',
+        url     := 'https://YOUR-PROJECT-REF.supabase.co/functions/v1/notify-invite',
         headers := jsonb_build_object('Content-Type', 'application/json'),
         body    := jsonb_build_object('record', to_jsonb(new))
     );
