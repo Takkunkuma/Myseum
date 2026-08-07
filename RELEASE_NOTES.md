@@ -2,6 +2,24 @@
 
 TestFlight "What to Test" copy, newest first.
 
+## Build 7
+
+**Much faster**
+- Switching tabs no longer reloads — the app keeps your place, like Instagram.
+- The Events feed opens ~2× faster and loads 3 months at a time as you scroll.
+- Photo matching went from one library query per event to a single query for
+  the whole window, off the main thread (~7–18× faster).
+- No more flash of the old layout before the correct one appears.
+
+**Smoother calendar sheet**
+- Dragging the day sheet up/down is now smooth — it used to flash and stutter
+  because the sheet resized every frame. It now slides as a single piece.
+
+**Please try**
+1. Bounce between Events and Calendar — does it stay exactly where you left it?
+2. Drag the calendar day sheet up slowly, then flick it. Smooth both ways?
+3. Scroll the Events feed down — older months should load as you go.
+
 ## Build 6
 
 **Cleaner Events feed**
