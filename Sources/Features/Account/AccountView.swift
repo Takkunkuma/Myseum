@@ -15,6 +15,15 @@ struct AccountView: View {
 
     var body: some View {
         NavigationStack {
+            VStack(spacing: 0) {
+            HStack {
+                Text("Account").font(.largeTitle.weight(.bold))
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top, 6)
+            .padding(.bottom, 4)
+
             List {
                 profileSection
 
@@ -88,8 +97,9 @@ struct AccountView: View {
                     }
                 }
             }
-            .navigationTitle("Account")
             .contentMargins(.bottom, 96, for: .scrollContent)
+            }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showAuth) { AuthView() }
         }
     }

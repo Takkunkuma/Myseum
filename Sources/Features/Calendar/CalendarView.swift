@@ -22,13 +22,14 @@ struct CalendarView: View {
             GeometryReader { geo in
                 ZStack(alignment: .bottom) {
                     VStack(spacing: 14) {
+                        titleHeader
                         monthHeader
                         weekdayHeader
                         slidingGrid
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal)
-                    .padding(.top, 4)
+                    .padding(.top, 6)
 
                     DayEventsPanel(
                         day: selectedDay,
@@ -39,12 +40,7 @@ struct CalendarView: View {
                     )
                 }
             }
-            .navigationTitle("Calendar")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showEditor = true } label: { Image(systemName: "plus") }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showEditor, onDismiss: { Task { await store.refresh() } }) {
                 EventEditorView(initialDate: selectedDay)
             }
@@ -65,6 +61,17 @@ struct CalendarView: View {
     }
 
     // MARK: - Header
+
+    /// Title and the add button share one row.
+    private var titleHeader: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("Calendar").font(.largeTitle.weight(.bold))
+            Spacer()
+            Button { showEditor = true } label: {
+                Image(systemName: "plus").font(.title2)
+            }
+        }
+    }
 
     private var monthHeader: some View {
         HStack {

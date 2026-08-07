@@ -30,11 +30,46 @@ struct EventsListView: View {
 
     private static let topAnchor = "feed-top"
 
+    /// Title and actions share one row, so the header costs a single line.
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(isSelecting ? "\(selectedIDs.count) selected" : "Events")
+                .font(.largeTitle.weight(.bold))
+            Spacer()
+            if isSelecting {
+                Button("Done") { isSelecting = false; selectedIDs.removeAll() }
+                    .font(.body)
+                Menu {
+                    Button { hideSelected() } label: { Label("Hide", systemImage: "eye.slash") }
+                    Button(role: .destructive) { deleteSelected() } label: { Label("Delete", systemImage: "trash") }
+                } label: {
+                    Image(systemName: "ellipsis.circle").font(.title2)
+                }
+                .disabled(selectedIDs.isEmpty)
+                .padding(.leading, 6)
+            } else {
+                Menu {
+                    Button { showEditor = true } label: { Label("Add event", systemImage: "plus") }
+                    if !store.events.isEmpty {
+                        Button { isSelecting = true } label: { Label("Select events", systemImage: "checkmark.circle") }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle").font(.title2)
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
+    }
+
     private var photoGranted: Bool { photoStatus == .authorized || photoStatus == .limited }
     private var showFilterToggle: Bool { photoGranted && countsReady && !isSelecting }
 
     var body: some View {
         NavigationStack {
+            VStack(spacing: 0) {
+            header
             Group {
                 if !ready {
                     ProgressView()
@@ -97,32 +132,8 @@ struct EventsListView: View {
                     }
                 }
             }
-            .navigationTitle(isSelecting ? "\(selectedIDs.count) selected" : "Events")
-            .toolbar {
-                if isSelecting {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("Done") { isSelecting = false; selectedIDs.removeAll() }
-                    }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            Button { hideSelected() } label: { Label("Hide", systemImage: "eye.slash") }
-                            Button(role: .destructive) { deleteSelected() } label: { Label("Delete", systemImage: "trash") }
-                        } label: {
-                            Image(systemName: "ellipsis.circle")
-                        }
-                        .disabled(selectedIDs.isEmpty)
-                    }
-                } else {
-                    if !store.events.isEmpty {
-                        ToolbarItem(placement: .topBarLeading) {
-                            Button("Select") { isSelecting = true }
-                        }
-                    }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button { showEditor = true } label: { Image(systemName: "plus") }
-                    }
-                }
             }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showEditor, onDismiss: { Task { await reload() } }) {
                 EventEditorView(initialDate: Date())
             }
