@@ -22,9 +22,12 @@ struct DayEventsPanel: View {
     }
     private var peekHeight: CGFloat { max(180, min(280, availableHeight * 0.4)) }
     private var fullHeight: CGFloat { max(peekHeight, availableHeight - 6) }
-    private var height: CGFloat {
-        let base = expanded ? fullHeight : peekHeight
-        return min(fullHeight, max(peekHeight, base - dragOffset))
+    /// How far down the sheet sits when collapsed.
+    private var collapsedOffset: CGFloat { fullHeight - peekHeight }
+    /// Live position: resting place plus the in-progress drag, clamped to the ends.
+    private var currentOffset: CGFloat {
+        let resting = expanded ? 0 : collapsedOffset
+        return min(collapsedOffset, max(0, resting + dragOffset))
     }
 
     var body: some View {
@@ -33,10 +36,14 @@ struct DayEventsPanel: View {
             eventsList
         }
         .frame(maxWidth: .infinity)
-        .frame(height: height, alignment: .top)
+        // Fixed height + vertical translation: dragging is a GPU transform, so the
+        // list never re-lays out mid-gesture (resizing the frame every frame is what
+        // made rows rebuild and flash).
+        .frame(height: fullHeight, alignment: .top)
         .background(Color(.systemBackground))
         .clipShape(UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22))
         .shadow(color: .black.opacity(0.12), radius: 12, y: -3)
+        .offset(y: currentOffset)
         .task(id: eventsKey) { await computeCounts() }
     }
 
@@ -72,13 +79,15 @@ struct DayEventsPanel: View {
         .contentShape(Rectangle())
         .onTapGesture { setExpanded(!expanded) }
         .gesture(
-            DragGesture(minimumDistance: 6)
+            DragGesture(minimumDistance: 2)
                 .onChanged { value in dragOffset = value.translation.height }
                 .onEnded { value in
-                    // Velocity-aware: a single upward flick fully expands (or collapses).
-                    let projected = (expanded ? fullHeight : peekHeight) - value.predictedEndTranslation.height
-                    let willExpand = projected > (peekHeight + fullHeight) / 2
-                    withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
+                    // Settle to whichever end the flick is heading for, so one swipe
+                    // carries all the way instead of stopping where the finger lifted.
+                    let resting = expanded ? 0 : collapsedOffset
+                    let projected = resting + value.predictedEndTranslation.height
+                    let willExpand = projected < collapsedOffset / 2
+                    withAnimation(.interactiveSpring(response: 0.38, dampingFraction: 0.86, blendDuration: 0.1)) {
                         expanded = willExpand
                         dragOffset = 0
                     }
@@ -87,7 +96,9 @@ struct DayEventsPanel: View {
     }
 
     private func setExpanded(_ value: Bool) {
-        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { expanded = value }
+        withAnimation(.interactiveSpring(response: 0.38, dampingFraction: 0.86, blendDuration: 0.1)) {
+            expanded = value
+        }
     }
 
     // MARK: - Events list
@@ -120,6 +131,11 @@ struct DayEventsPanel: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 100)
         }
+        // The sheet keeps its full height while collapsed (the rest hangs below the
+        // screen), so pad the scroll content by that much to keep it in view.
+        // Changes only when expanded toggles — never mid-drag.
+        .contentMargins(.bottom, expanded ? 0 : collapsedOffset, for: .scrollContent)
+        .scrollIndicators(expanded ? .automatic : .hidden)
     }
 
     private var feedItems: [DayFeedItem] {
